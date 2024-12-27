@@ -137,15 +137,14 @@ impl Pool {
 impl Card {
     fn new(connection: &Connection, id: i32, front: String, back: String, front_image: PathBuf,
            back_image: PathBuf, score: i32, pool_id: i32, category_name: String) -> Result<()> {
+        let front_image_resolved = front_image.into_os_string().into_string().unwrap_or_default();
+        let back_image_resolved = back_image.into_os_string().into_string().unwrap_or_default();
         match connection.execute(
             "INSERT INTO \
             Card(id, front, back, frontImage, backImage, score, poolId, categoryName) \
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![id, front, back, 
-                front_image.into_os_string().into_string().unwrap(),
-                back_image.into_os_string().into_string().unwrap(),
-                score, pool_id, category_name
-            ],
+            params![id, front, back, front_image_resolved, back_image_resolved, score, 
+                pool_id, category_name],
         ) {
             Ok(_) => {
                 debug!("[DB] Created new Card {} in Pool {} in Category {}", id, pool_id, category_name);
