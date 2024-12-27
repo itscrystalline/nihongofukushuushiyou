@@ -1,0 +1,10 @@
+[package]
+name = "nihongofukushuushiyou"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusqlite = { version = "0.32.0", features = ["bundled", "backup"] }
+log = "0.4.22"
+env_logger = "0.11.6"
+rand = "0.9.0-beta.1"
