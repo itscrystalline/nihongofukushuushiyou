@@ -6,7 +6,7 @@ pub(crate) struct Question {
     pub front: String,
     pub front_image: Option<PathBuf>,
     pub correct_option: String,
-    pub incorrect_options: Vec<String>,
+    pub incorrect_options: Vec<String>
 }
 
 impl Question {}
