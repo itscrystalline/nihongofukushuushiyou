@@ -4,6 +4,7 @@ use log::{debug, warn};
 use rand::seq::SliceRandom;
 use rand::{rng, seq::IndexedRandom};
 use rusqlite::{Connection, Result};
+use std::path::PathBuf;
 use std::process::exit;
 use std::time::Instant;
 use std::{env, path::Path};
@@ -17,11 +18,11 @@ macro_rules! fetch_pool_cards_and_cache {
             Ok(cards) => {
                 $cached_pool_id = Some($pool_id);
                 Some(cards)
-            },
+            }
             Err(_) => {
                 warn!("[Setup] Cannot fetch cards in pool {}", $pool_id);
                 None
-            },
+            }
         }
     };
 }
@@ -34,6 +35,23 @@ macro_rules! extract_or_continue {
             }
             Some(value) => value,
         }
+    };
+}
+
+macro_rules! card_face_tuple {
+    ($val1:expr, $val2:expr) => {
+        (
+            if $val1.is_empty() {
+                None
+            } else {
+                Some($val1)
+            },
+            if $val2.as_os_str().is_empty() {
+                None
+            } else {
+                Some($val2)
+            },
+        )
     };
 }
 
@@ -117,8 +135,12 @@ fn init_questions(conn: &Connection, cards: Vec<Card>) -> Result<Vec<Question>> 
     let mut cached_pool_id: Option<i32> = None;
     let mut cached_pool_cards: Option<Vec<Card>> = None;
     for card in cards {
-        let card_id = extract_or_continue!(card.id, "[Setup] Card does not have an `id`! Skipping...");
-        let pool_id = extract_or_continue!(card.pool_id, "[Setup] Card does not have a `pool_id`! Skipping...");
+        let card_id =
+            extract_or_continue!(card.id, "[Setup] Card does not have an `id`! Skipping...");
+        let pool_id = extract_or_continue!(
+            card.pool_id,
+            "[Setup] Card does not have a `pool_id`! Skipping..."
+        );
 
         match cached_pool_id {
             None => cached_pool_cards = fetch_pool_cards_and_cache!(&conn, pool_id, cached_pool_id),
@@ -133,26 +155,28 @@ fn init_questions(conn: &Connection, cards: Vec<Card>) -> Result<Vec<Question>> 
         let mut cards = cached_pool_cards.clone().unwrap();
         cards.retain(|c| c.id.unwrap() != card_id);
 
-        let mut backside: Vec<String> = cards.iter().map(
-            |c| if c.back.is_empty() {
-                let back_image_path = c.back_image.clone().into_os_string().into_string().unwrap();
-                back_image_path
-            } else {
-                c.back.clone()
-            }
-        ).collect();
+        let mut backside: Vec<(Option<String>, Option<PathBuf>)> = cards
+            .iter()
+            .map(|c| {
+                let front_text = c.front.clone();
+                let front_img = c.front_image.clone();
+                card_face_tuple!(front_text, front_img)
+            })
+            .collect();
         backside.shuffle(&mut rng());
 
         questions.push(Question {
             card_id,
-            front: card.front,
-            front_image: card.front_image,
-            correct_option: card.back,
+            front: card_face_tuple!(card.front, card.front_image),
+            correct_option: card_face_tuple!(card.back, card.back_image),
             incorrect_options: backside[..3].to_vec(),
         })
     }
 
-    debug!("[Setup] Initialized questions in {} ms.", now.elapsed().as_millis());
+    debug!(
+        "[Setup] Initialized questions in {} ms.",
+        now.elapsed().as_millis()
+    );
     Ok(questions)
 }
 
