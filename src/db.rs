@@ -135,8 +135,8 @@ impl Pool {
     }
 }
 impl Card {
-    fn new(connection: &Connection, id: i32, front: String, back: String, front_image: PathBuf,
-           back_image: PathBuf, score: i32, pool_id: i32, category_name: String) -> Result<()> {
+    fn insert(connection: &Connection, id: i32, front: String, back: String, front_image: PathBuf,
+              back_image: PathBuf, score: i32, pool_id: i32, category_name: String) -> Result<()> {
         let front_image_resolved = front_image.into_os_string().into_string().unwrap_or_default();
         let back_image_resolved = back_image.into_os_string().into_string().unwrap_or_default();
         match connection.execute(
@@ -159,8 +159,8 @@ impl Card {
 
     pub fn add(connection: &Connection, src: Card) -> Result<()> {
         let id = Self::latest_id(connection).unwrap_or(-1) + 1;
-        Self::new(connection, src.id.unwrap_or(id), src.front, src.back, src.front_image, src.back_image,
-                  src.score.unwrap_or(0), src.pool_id.unwrap(), src.category_name.unwrap())
+        Self::insert(connection, src.id.unwrap_or(id), src.front, src.back, src.front_image, src.back_image,
+                     src.score.unwrap_or(0), src.pool_id.unwrap(), src.category_name.unwrap())
     }
 
     fn latest_id(connection: &Connection) -> Result<i32> {
@@ -261,8 +261,22 @@ pub(crate) fn open_db(src: &Path) -> Result<Connection> {
 
 pub(crate) fn close_db(connection: Connection) -> Result<()> {
     info!("[DB] Closing Database");
-    connection.close().unwrap();
-    Ok(())
+    match connection.close() {
+        Ok(_) => Ok(()),
+        Err((conn, err)) => {
+            error!("[DB] Cannot close connection. Retrying 1/2...");
+            match conn.close() {
+                Ok(_) => Ok(()),
+                Err((conn2, err)) => {
+                    error!("[DB] Cannot close connection. Retrying 2/2...");
+                    match conn2.close() {
+                        Ok(_) => Ok(()),
+                        Err(_) => panic!("[DB] Cannot close connection! Aborting.")
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn init_db(conn: Connection) -> Result<Connection> {
@@ -311,5 +325,6 @@ fn init_db(conn: Connection) -> Result<Connection> {
     )?;
     info!("[DB INIT] Created index Pool_categoryName_idx");
     info!("[DB INIT] Database Creation Successful!");
+    
     Ok(conn)
 }
