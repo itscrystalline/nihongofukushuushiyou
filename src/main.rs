@@ -3,10 +3,10 @@ use std::process::exit;
 use std::{env, path::Path};
 
 mod libfukushuu;
-mod importer;
+mod nyuuryokusha;
 
 use libfukushuu::db;
-use libfukushuu::question::{get_question_cards, init_questions, rand_category};
+use libfukushuu::shitsumon::{get_question_cards, init_questions, rand_category};
 
 fn main() {
     env_logger::init();

@@ -11,4 +11,4 @@ rand = "0.9.0-beta.1"
 
 [[bin]]
 name = "nihongonyuuryoku"
-path = "src/importer.rs"
+path = "src/nyuuryokusha.rs"
