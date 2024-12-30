@@ -8,7 +8,8 @@ rusqlite = { version = "0.32.0", features = ["bundled", "backup"] }
 log = "0.4.22"
 env_logger = "0.11.6"
 rand = "0.9.0-beta.1"
-console-menu = "0.3.0"
+colored = "2.2.0"
+text_io = "0.1.12"
 
 [[bin]]
 name = "nihongonyuuryoku"

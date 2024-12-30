@@ -1,5 +1,3 @@
-use crate::libfukushuu::db;
-
 fn main() {
-    
+    todo!()
 }

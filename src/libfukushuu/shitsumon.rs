@@ -53,6 +53,7 @@ macro_rules! card_face_tuple {
 #[derive(Debug, Clone)]
 pub(crate) struct Question {
     pub card_id: i32,
+    pub score: i32,
     pub front: (Option<String>, Option<PathBuf>),
     pub correct_option: (Option<String>, Option<PathBuf>),
     pub incorrect_options: Vec<(Option<String>, Option<PathBuf>)>
@@ -95,10 +96,22 @@ impl Question {
         );
         map.clone().collect()
     }
+    fn get_all_options_tuple(&self) -> Vec<(Option<String>, Option<PathBuf>)> {
+        let mut vec: Vec<(Option<String>, Option<PathBuf>)> = vec![self.correct_option.clone()];
+        vec.extend(self.incorrect_options.clone());
+        vec
+    }
     pub fn get_all_options(&self) -> Vec<String> {
         let mut vec = vec![self.get_correct_str()];
-        vec.append(&mut self.get_incorrect_str());
+        vec.extend(self.get_incorrect_str());
         vec
+    }
+    pub fn get_options_randomize(&self) -> (Vec<String>, usize) {
+        let mut opts = self.get_all_options();
+        let correct = &self.get_correct_str();
+        opts.shuffle(&mut rng());
+        let index = opts.iter().position(|r| r == correct).unwrap();
+        (opts, index)
     }
     fn set_score(&self, conn: &Connection, score: i32) -> Result<i32>{
         match Card::change_score(&conn, self.card_id, score) {
@@ -187,6 +200,7 @@ pub(crate) fn init_questions(conn: &Connection, cards: Vec<Card>) -> Result<Vec<
 
         questions.push(Question {
             card_id,
+            score: card.score.unwrap_or(0),
             front: card_face_tuple!(card.front, card.front_image),
             correct_option: card_face_tuple!(card.back, card.back_image),
             incorrect_options: backside[..3].to_vec(),

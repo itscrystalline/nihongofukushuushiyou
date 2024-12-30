@@ -1,15 +1,52 @@
-use console_menu::{color, Menu, MenuOption, MenuProps};
-use log::{debug, warn};
-use std::process::exit;
-use std::{env, path::Path};
+use colored::Colorize;
+use log::{debug, error, info, warn};
 use rusqlite::{Connection, Result};
+use std::process::exit;
+use std::str::FromStr;
+use std::{env, path::Path};
+use text_io::read;
 
 mod libfukushuu;
 mod nyuuryokusha;
 
-use crate::libfukushuu::shitsumon::Question;
-use libfukushuu::db;
-use libfukushuu::shitsumon::{get_question_cards, init_questions, rand_category};
+use crate::libfukushuu::db;
+use crate::libfukushuu::shitsumon::{get_question_cards, init_questions, rand_category};
+
+#[derive(Debug)]
+enum Choice {
+    One,
+    Two,
+    Three,
+    Four,
+    DontKnow,
+    Quit,
+}
+
+impl FromStr for Choice {
+    type Err = ();
+    fn from_str(input: &str) -> Result<Choice, ()> {
+        match input {
+            "1" => Ok(Choice::One),
+            "2" => Ok(Choice::Two),
+            "3" => Ok(Choice::Three),
+            "4" => Ok(Choice::Four),
+            "q" => Ok(Choice::Quit),
+            _ => Ok(Choice::DontKnow),
+        }
+    }
+}
+
+impl Choice {
+    fn from_usize(input: usize) -> Result<Choice, ()> {
+        match input {
+            0 => Ok(Choice::One),
+            1 => Ok(Choice::Two),
+            2 => Ok(Choice::Three),
+            3 => Ok(Choice::Four),
+            _ => Err(()),
+        }
+    }
+}
 
 fn main() {
     //INIT START
@@ -26,11 +63,12 @@ fn main() {
         Some(category) => category,
         None => {
             warn!("[Setup] No categories found. Come back when you have added some cards to the database!");
-            db::close_db(conn).unwrap();
+            finish(conn, Ok(()));
             exit(0)
         }
     };
     debug!("[Setup] Picked category {:?}", category);
+    println!("{}", format!("==========> {} ({} questions) <==========", category.name, question_count).cyan());
 
     let cards = get_question_cards(&conn, question_count, category);
 
@@ -39,33 +77,49 @@ fn main() {
 
     // INIT DONE
 
-    for question in questions {
-        let mut menu = build_menu(&conn, &question);
-        menu.show();
+    for (idx, question) in questions.iter().enumerate() {
+        let leading = format!("{}/{}. ", idx + 1, question_count);
+        println!("{}{}",
+                 leading.cyan(),
+                 format!("{:?} ({})", question.front, question.score).black().bold().on_white()
+        );
+        let (options, correct) = question.get_options_randomize();
+
+        let indent = " ".repeat(leading.len());
+        for (i, option) in options.iter().enumerate() {
+            println!("{}{}. {}", indent,
+                     format!("{}", i + 1).bold(),
+                     option
+            )
+        }
+
+        let _correct_choice = match Choice::from_usize(correct) {
+            Ok(choice) => choice,
+            Err(_) => {
+                finish(conn, Err("Cannot convert usize to Choice!"));
+                exit(1)
+            }
+        };
+
+        print!("{} ", "Answer (1-4, q to quit prematurely and anything else if you don't know):".cyan());
+        let choice_string: String = read!("{}\n");
+        let choice = Choice::from_str(choice_string.as_str()).unwrap();
+
+        info!("choice: {:?}", choice)
     }
 
-    db::close_db(conn).unwrap()
+    finish(conn, Ok(()));
 }
 
-fn build_menu(conn: &Connection, question: &Question) -> Menu {
-    let options = question.get_all_options();
-    let menu_options = options.iter().map(|opt| {
-        let owned_opt = opt.clone();
-        MenuOption::new(owned_opt.clone().as_str(), move || {
-            println!("{}", owned_opt.as_str());
-            question.increment_score(&conn);
-        });
-        todo!()
-    }).collect();
-
-    Menu::new(menu_options, MenuProps {
-        title: question.get_front_str().as_str(),
-        message: "",
-        fg_color: color::BLACK,
-        bg_color: color::BLUE,
-        msg_color: Some(color::DARK_GRAY),
-        ..MenuProps::default()
-    })
+fn finish(conn: Connection, to_error: Result<(), &str>) {
+    db::close_db(conn).unwrap();
+    exit(match to_error {
+        Ok(_) => 0,
+        Err(msg) => {
+            error!("Need to exit with cause: {}", msg);
+            1
+        }
+    });
 }
 
 fn handle_args(args: Vec<String>) -> i32 {
