@@ -12,5 +12,5 @@ colored = "2.2.0"
 text_io = "0.1.12"
 
 [[bin]]
-name = "nihongonyuuryoku"
+name = "nyuuryokusha"
 path = "src/nyuuryokusha.rs"
