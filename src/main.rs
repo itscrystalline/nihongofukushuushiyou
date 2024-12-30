@@ -1,6 +1,7 @@
 use colored::Colorize;
 use log::{debug, error, info, warn};
 use rusqlite::{Connection, Result};
+use std::cmp::PartialEq;
 use std::process::exit;
 use std::str::FromStr;
 use std::{env, path::Path};
@@ -12,7 +13,7 @@ mod nyuuryokusha;
 use crate::libfukushuu::db;
 use crate::libfukushuu::shitsumon::{get_question_cards, init_questions, rand_category};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum Choice {
     One,
     Two,
@@ -71,19 +72,33 @@ fn main() {
     println!("{}", format!("==========> {} ({} questions) <==========", category.name, question_count).cyan());
 
     let cards = get_question_cards(&conn, question_count, category);
+    debug!("[Setup] Cards: {:?}", cards);
 
-    let questions = init_questions(&conn, cards).unwrap();
+    let mut questions = init_questions(&conn, cards).unwrap();
     debug!("[Setup] Questions: {:?}", questions);
 
     // INIT DONE
 
-    for (idx, question) in questions.iter().enumerate() {
+    for idx in 1..questions.len() {
+        macro_rules! incr_and_print {
+            ($to_incr: expr) => {
+                let score = $to_incr.increment_score(&conn).unwrap();
+                println!("{}", format!("Correct!: {} -> {}", score - 1, score).bright_green())
+            };
+        }
+        macro_rules! decr_and_print {
+            ($to_incr: expr) => {
+                let score = $to_incr.decrement_score(&conn).unwrap();
+                println!("{}", format!("Correct!: {} -> {}", score + 1, score).bright_red())
+            };
+        }
+
         let leading = format!("{}/{}. ", idx + 1, question_count);
         println!("{}{}",
                  leading.cyan(),
-                 format!("{:?} ({})", question.front, question.score).black().bold().on_white()
+                 format!("{:?} ({})", questions[idx - 1].front, questions[idx - 1].score).black().bold().on_white()
         );
-        let (options, correct) = question.get_options_randomize();
+        let (options, correct) = questions[idx - 1].get_options_randomize();
 
         let indent = " ".repeat(leading.len());
         for (i, option) in options.iter().enumerate() {
@@ -93,7 +108,7 @@ fn main() {
             )
         }
 
-        let _correct_choice = match Choice::from_usize(correct) {
+        let correct_choice = match Choice::from_usize(correct) {
             Ok(choice) => choice,
             Err(_) => {
                 finish(conn, Err("Cannot convert usize to Choice!"));
@@ -104,8 +119,25 @@ fn main() {
         print!("{} ", "Answer (1-4, q to quit prematurely and anything else if you don't know):".cyan());
         let choice_string: String = read!("{}\n");
         let choice = Choice::from_str(choice_string.as_str()).unwrap();
+        debug!("choice: {:?}", choice);
 
-        info!("choice: {:?}", choice)
+        match choice {
+            Choice::One | Choice::Two | Choice::Three | Choice::Four => {
+                if choice == correct_choice {
+                    incr_and_print!(questions[idx - 1]);
+                } else {
+                    decr_and_print!(questions[idx - 1]);
+                }
+            },
+            Choice::DontKnow => {
+                decr_and_print!(questions[idx - 1]);
+            },
+            Choice::Quit => {
+                println!("{}", "Quitting Early!".cyan());
+                finish(conn, Ok(()));
+                exit(0)
+            }
+        }
     }
 
     finish(conn, Ok(()));

@@ -113,21 +113,22 @@ impl Question {
         let index = opts.iter().position(|r| r == correct).unwrap();
         (opts, index)
     }
-    fn set_score(&self, conn: &Connection, score: i32) -> Result<i32>{
+    fn set_score(&mut self, conn: &Connection, score: i32) -> Result<i32> {
         match Card::change_score(&conn, self.card_id, score) {
             Ok(score) => {
+                self.score = score;
                 Ok(score)
             },
             Err(err) => Err(err)
         }
     }
     pub fn get_score(&self, conn: &Connection) -> Result<i32> {
-        Ok(Card::get_score(&conn, self.card_id).unwrap().unwrap_or(0))
+        Ok(Card::get_score(&conn, self.card_id)?.unwrap_or(0))
     }
-    pub fn increment_score(&self, conn: &Connection) -> Result<i32> {
+    pub fn increment_score(&mut self, conn: &Connection) -> Result<i32> {
         self.set_score(conn, self.get_score(&conn)? + 1)
     }
-    pub fn decrement_score(&self, conn: &Connection) -> Result<i32> {
+    pub fn decrement_score(&mut self, conn: &Connection) -> Result<i32> {
         self.set_score(conn, self.get_score(&conn)? - 1)
     }
 }
@@ -191,9 +192,9 @@ pub(crate) fn init_questions(conn: &Connection, cards: Vec<Card>) -> Result<Vec<
         let mut backside: Vec<(Option<String>, Option<PathBuf>)> = cards
             .iter()
             .map(|c| {
-                let front_text = c.front.clone();
-                let front_img = c.front_image.clone();
-                card_face_tuple!(front_text, front_img)
+                let back_text = c.back.clone();
+                let back_img = c.back_image.clone();
+                card_face_tuple!(back_text, back_img)
             })
             .collect();
         backside.shuffle(&mut rng());
