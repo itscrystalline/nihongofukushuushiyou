@@ -221,6 +221,20 @@ impl Card {
 
         rows.collect()
     }
+
+    pub fn change_score(connection: &Connection, id: i32, score: i32) -> Result<i32> {
+        match connection.execute("UPDATE Card SET score = ?2 WHERE id = ?1", params![id, score]) {
+            Ok(_) => Ok(score),
+            Err(err) => {
+                error!("[DB] Failed to update score for ID {}.", id);
+                Err(err)
+            }
+        }
+    }
+    pub fn get_score(connection: &Connection, id: i32) -> Result<Option<i32>> {
+        let card = Card::get_by_id(&connection, id)?;
+        Ok(card.score)
+    }
 }
 pub(crate) fn create_or_open(src: &Path) -> Result<Connection> {
     if src.exists() {

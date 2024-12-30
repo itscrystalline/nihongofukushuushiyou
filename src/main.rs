@@ -2,6 +2,7 @@ use console_menu::{color, Menu, MenuOption, MenuProps};
 use log::{debug, warn};
 use std::process::exit;
 use std::{env, path::Path};
+use rusqlite::{Connection, Result};
 
 mod libfukushuu;
 mod nyuuryokusha;
@@ -39,18 +40,23 @@ fn main() {
     // INIT DONE
 
     for question in questions {
-        let mut menu = build_menu(question);
+        let mut menu = build_menu(&conn, &question);
         menu.show();
     }
 
     db::close_db(conn).unwrap()
 }
 
-fn build_menu(question: Question) -> Menu {
-    todo!();
-    let menu_options = question.get_all_options().iter().map(|opt|
-        MenuOption::new(opt.as_str(), || println!("{}", opt.as_str()))
-    ).collect();
+fn build_menu(conn: &Connection, question: &Question) -> Menu {
+    let options = question.get_all_options();
+    let menu_options = options.iter().map(|opt| {
+        let owned_opt = opt.clone();
+        MenuOption::new(owned_opt.clone().as_str(), move || {
+            println!("{}", owned_opt.as_str());
+            question.increment_score(&conn);
+        });
+        todo!()
+    }).collect();
 
     Menu::new(menu_options, MenuProps {
         title: question.get_front_str().as_str(),

@@ -100,6 +100,23 @@ impl Question {
         vec.append(&mut self.get_incorrect_str());
         vec
     }
+    fn set_score(&self, conn: &Connection, score: i32) -> Result<i32>{
+        match Card::change_score(&conn, self.card_id, score) {
+            Ok(score) => {
+                Ok(score)
+            },
+            Err(err) => Err(err)
+        }
+    }
+    pub fn get_score(&self, conn: &Connection) -> Result<i32> {
+        Ok(Card::get_score(&conn, self.card_id).unwrap().unwrap_or(0))
+    }
+    pub fn increment_score(&self, conn: &Connection) -> Result<i32> {
+        self.set_score(conn, self.get_score(&conn)? + 1)
+    }
+    pub fn decrement_score(&self, conn: &Connection) -> Result<i32> {
+        self.set_score(conn, self.get_score(&conn)? - 1)
+    }
 }
 
 pub(crate) fn get_question_cards(conn: &Connection, question_count: i32, category: Category) -> Vec<Card> {
