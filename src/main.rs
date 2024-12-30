@@ -1,5 +1,3 @@
-use crate::db::{Card, Category, Pool};
-use crate::question::Question;
 use log::{debug, warn};
 use rand::seq::SliceRandom;
 use rand::{rng, seq::IndexedRandom};
@@ -9,8 +7,10 @@ use std::process::exit;
 use std::time::Instant;
 use std::{env, path::Path};
 
-mod db;
-mod question;
+mod libfukushuu;
+use libfukushuu::db;
+use libfukushuu::db::{Card, Category, Pool};
+use libfukushuu::question::Question;
 
 macro_rules! fetch_pool_cards_and_cache {
     ($conn:expr, $pool_id:expr, $cached_pool_id:expr) => {
