@@ -1,3 +1,4 @@
+use console_menu::{color, Menu, MenuOption, MenuProps};
 use log::{debug, warn};
 use std::process::exit;
 use std::{env, path::Path};
@@ -5,10 +6,13 @@ use std::{env, path::Path};
 mod libfukushuu;
 mod nyuuryokusha;
 
+use crate::libfukushuu::shitsumon::Question;
 use libfukushuu::db;
 use libfukushuu::shitsumon::{get_question_cards, init_questions, rand_category};
 
 fn main() {
+    //INIT START
+
     env_logger::init();
     let args: Vec<String> = env::args().collect();
     let question_count = handle_args(args);
@@ -32,7 +36,30 @@ fn main() {
     let questions = init_questions(&conn, cards).unwrap();
     debug!("[Setup] Questions: {:?}", questions);
 
+    // INIT DONE
+
+    for question in questions {
+        let mut menu = build_menu(question);
+        menu.show();
+    }
+
     db::close_db(conn).unwrap()
+}
+
+fn build_menu(question: Question) -> Menu {
+    todo!();
+    let menu_options = question.get_all_options().iter().map(|opt|
+        MenuOption::new(opt.as_str(), || println!("{}", opt.as_str()))
+    ).collect();
+
+    Menu::new(menu_options, MenuProps {
+        title: question.get_front_str().as_str(),
+        message: "",
+        fg_color: color::BLACK,
+        bg_color: color::BLUE,
+        msg_color: Some(color::DARK_GRAY),
+        ..MenuProps::default()
+    })
 }
 
 fn handle_args(args: Vec<String>) -> i32 {

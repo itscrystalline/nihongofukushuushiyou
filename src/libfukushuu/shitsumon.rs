@@ -58,6 +58,50 @@ pub(crate) struct Question {
     pub incorrect_options: Vec<(Option<String>, Option<PathBuf>)>
 }
 
+impl Question {
+    fn get_str_from_tuple(tuple: &(Option<String>, Option<PathBuf>)) -> String {
+        let mut ret = String::from("(");
+        let str_exists = if tuple.0 == None { false } else { true };
+        let path_exists = if tuple.1 == None { false } else { true };
+
+        ret.push_str(match &tuple.0 {
+            None => "",
+            Some(str) => {
+                str.as_str()
+            }
+        });
+        if (str_exists && path_exists) {
+            ret.push_str(", ")
+        }
+        ret.push_str(match &tuple.1 {
+            None => "",
+            Some(path) => {
+                path.to_str().unwrap()
+            }
+        });
+
+        ret.push_str(")");
+        ret
+    }
+    pub fn get_front_str(&self) -> String {
+        Self::get_str_from_tuple(&self.front)
+    }
+    pub fn get_correct_str(&self) -> String {
+        Self::get_str_from_tuple(&self.correct_option)
+    }
+    pub fn get_incorrect_str(&self) -> Vec<String> {
+        let map = &self.incorrect_options.iter().map(|opt|
+            Self::get_str_from_tuple(opt)
+        );
+        map.clone().collect()
+    }
+    pub fn get_all_options(&self) -> Vec<String> {
+        let mut vec = vec![self.get_correct_str()];
+        vec.append(&mut self.get_incorrect_str());
+        vec
+    }
+}
+
 pub(crate) fn get_question_cards(conn: &Connection, question_count: i32, category: Category) -> Vec<Card> {
     debug!("[Setup] Obtaining {} questions.", question_count);
     let questions_usize = question_count as usize;
