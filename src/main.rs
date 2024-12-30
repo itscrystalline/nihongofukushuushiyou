@@ -63,7 +63,8 @@ fn main() {
     let category = match rand_category(&conn) {
         Some(category) => category,
         None => {
-            warn!("[Setup] No categories found. Come back when you have added some cards to the database!");
+            warn!("[Setup] No categories found.");
+            println!("{}", "No categories found. Come back when you have added some cards to the database!".yellow());
             finish(conn, Ok(()));
             exit(0)
         }
