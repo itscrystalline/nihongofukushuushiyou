@@ -133,7 +133,7 @@ impl Question {
     }
 }
 
-pub(crate) fn get_question_cards(conn: &Connection, question_count: i32, category: Category) -> Vec<Card> {
+pub(crate) fn get_question_cards(conn: &Connection, question_count: u32, category: Category) -> Vec<Card> {
     debug!("[Setup] Obtaining {} questions.", question_count);
     let questions_usize = question_count as usize;
     let mut cards = Vec::with_capacity(questions_usize);
@@ -163,7 +163,7 @@ pub(crate) fn get_question_cards(conn: &Connection, question_count: i32, categor
     cards
 }
 
-pub(crate) fn init_questions(conn: &Connection, cards: Vec<Card>) -> Result<Vec<Question>> {
+pub(crate) fn init_questions(conn: &Connection, cards: Vec<Card>, choices_count: u32) -> Result<Vec<Question>> {
     let now = Instant::now();
     let mut questions: Vec<Question> = Vec::with_capacity(cards.len());
     let mut cached_pool_id: Option<i32> = None;
@@ -199,12 +199,24 @@ pub(crate) fn init_questions(conn: &Connection, cards: Vec<Card>) -> Result<Vec<
             .collect();
         backside.shuffle(&mut rng());
 
+        let incorrect_options: Vec<(Option<String>, Option<PathBuf>)>;
+        let incorrect_choices_count = (choices_count - 1) as usize;
+
+        if (backside.len() < incorrect_choices_count) {
+            warn!("[Setup] Cardlist in Pool {} does not have enough cards to populate the incorrect options! \
+            User Requested {} (incorrect) choices, only have {} choices left in pool!", pool_id,
+                incorrect_choices_count, backside.len());
+            incorrect_options = backside;
+        } else {
+            incorrect_options = backside[..incorrect_choices_count].to_vec();
+        }
+
         questions.push(Question {
             card_id,
             score: card.score.unwrap_or(0),
             front: card_face_tuple!(card.front, card.front_image),
             correct_option: card_face_tuple!(card.back, card.back_image),
-            incorrect_options: backside[..3].to_vec(),
+            incorrect_options,
         })
     }
 
