@@ -5,6 +5,7 @@ use log::{debug, error, info, warn};
 use rusqlite::{Connection, Result};
 use std::cmp::PartialEq;
 use std::fmt::format;
+use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
 use std::{env, path::Path};
@@ -27,12 +28,14 @@ enum Choice {
 #[command(name = "日本語復習しよう！ (Nihongofukushūshiyō!)")]
 #[command(version, about, long_about = None)]
 struct Args {
+    #[arg(short, long, value_name = "FILE", default_value = "flashcards.db")]
+    db: Option<PathBuf>,
     #[arg(short, long, default_value = "20")]
     question_count: u32,
     #[arg(short, long, default_value = "4")]
     choices_count: u32,
     #[arg(short, long, default_value = "error")]
-    log_level: String
+    log_level: String,
 }
 
 impl Choice {
@@ -42,13 +45,17 @@ impl Choice {
             input => match input.parse::<usize>() {
                 Ok(num) => {
                     if (num > choices_count as usize) {
-                        println!("{}", format!("There are only {} options available!", choices_count).bright_red());
+                        println!(
+                            "{}",
+                            format!("There are only {} options available!", choices_count)
+                                .bright_red()
+                        );
                         Choice::DontKnow
                     } else {
                         Choice::Option(num)
                     }
-                },
-                Err(_) => Choice::DontKnow
+                }
+                Err(_) => Choice::DontKnow,
             },
         }
     }
@@ -68,7 +75,7 @@ fn main() {
     let choices_count = args.choices_count;
     env_logger::Builder::from_env(Env::default().default_filter_or(args.log_level)).init();
 
-    let db_path = Path::new("flashcards.db");
+    let db_path = args.db.unwrap_or(PathBuf::from("flashcards.db"));
     let conn = db::create_or_open(db_path).unwrap();
     debug!("[DB] Database Connection Successful!");
 
@@ -165,12 +172,18 @@ fn main() {
                     incr_and_print!(questions[idx - 1]);
                 } else {
                     decr_and_print!(questions[idx - 1]);
-                    println!("{}", format!("The correct choice was {:?}.", correct_choice).green())
+                    println!(
+                        "{}",
+                        format!("The correct choice was {:?}.", correct_choice).green()
+                    )
                 }
             }
             Choice::DontKnow => {
                 decr_and_print!(questions[idx - 1]);
-                println!("{}", format!("The correct choice was {:?}.", correct_choice).green())
+                println!(
+                    "{}",
+                    format!("The correct choice was {:?}.", correct_choice).green()
+                )
             }
             Choice::Quit => {
                 println!("{}", "Quitting Early!".cyan());
