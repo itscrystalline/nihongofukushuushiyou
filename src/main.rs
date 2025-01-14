@@ -12,7 +12,6 @@ use std::{env, path::Path};
 use text_io::read;
 
 mod libfukushuu;
-mod nyuuryokusha;
 
 use crate::libfukushuu::db;
 use crate::libfukushuu::shitsumon::{get_question_cards, init_questions, rand_category};

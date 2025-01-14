@@ -26,7 +26,7 @@ pub struct Card {
 
 impl Category {
     pub fn new(connection: &Connection, name: String) -> Result<()> {
-        match connection.execute("INSERT INTO Category(name) VALUES (?1)", params![name]) {
+        match connection.execute("INSERT INTO Category (name) VALUES (?1)", params![name]) {
             Ok(_) => {
                 debug!("[DB] Created new Category '{}'", name);
                 Ok(())
@@ -61,7 +61,7 @@ impl Category {
         rows.collect()
     }
 
-    pub fn get_one(connection: &Connection, name: String) -> Result<Category> {
+    pub fn get_one(connection: &Connection, name: &String) -> Result<Category> {
         let mut statement =
             connection.prepare("SELECT * FROM Category WHERE name = :name LIMIT 1")?;
         let row = statement.query_row(&[(":name", &name)], |row| row.get(0))?;
@@ -73,7 +73,7 @@ impl Pool {
     pub fn new(connection: &Connection, id: i32, category_name: Option<String>) -> Result<()> {
         let actual_name = category_name.or(Some(String::new())).unwrap();
         match connection.execute(
-            "INSERT INTO Category(id, categoryName) VALUES (?1, ?2)",
+            "INSERT INTO Pool (id, categoryName) VALUES (?1, ?2)",
             params![id, actual_name],
         ) {
             Ok(_) => {
@@ -162,7 +162,7 @@ impl Card {
             .unwrap_or_default();
         match connection.execute(
             "INSERT INTO \
-            Card(id, front, back, frontImage, backImage, score, poolId, categoryName) \
+            Card (id, front, back, frontImage, backImage, score, poolId, categoryName) \
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 id,
@@ -283,7 +283,7 @@ impl Card {
         Ok(card.score)
     }
 }
-pub(crate) fn create_or_open(src: PathBuf) -> Result<Connection> {
+pub fn create_or_open(src: PathBuf) -> Result<Connection> {
     if src.exists() {
         info!("[DB] Opening existing Database");
         open_db(src)
@@ -293,7 +293,7 @@ pub(crate) fn create_or_open(src: PathBuf) -> Result<Connection> {
     }
 }
 
-pub(crate) fn create_db(dest: PathBuf) -> Result<Connection> {
+pub fn create_db(dest: PathBuf) -> Result<Connection> {
     let now = Instant::now();
     let mut db = Connection::open_in_memory()?;
     db = init_db(db)?;
@@ -313,14 +313,14 @@ pub(crate) fn create_db(dest: PathBuf) -> Result<Connection> {
     }
 }
 
-pub(crate) fn open_db(src: PathBuf) -> Result<Connection> {
+pub fn open_db(src: PathBuf) -> Result<Connection> {
     let now = Instant::now();
     let db = Connection::open(src)?;
     debug!("[DB] Opening took {} ms.", now.elapsed().as_millis());
     Ok(db)
 }
 
-pub(crate) fn close_db(connection: Connection) -> Result<()> {
+pub fn close_db(connection: Connection) -> Result<()> {
     info!("[DB] Closing Database");
     match connection.close() {
         Ok(_) => Ok(()),
