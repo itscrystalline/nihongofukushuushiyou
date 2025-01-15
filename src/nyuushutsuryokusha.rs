@@ -1,11 +1,12 @@
+use clap::{Parser, Subcommand};
 use colored::Colorize;
 use env_logger::Env;
 use log::{error, info};
-use std::path::PathBuf;
-
-use clap::{Parser, Subcommand};
 use rusqlite::Error;
 use serde::{Deserialize, Serialize};
+use std::fmt::format;
+use std::path::PathBuf;
+use std::time::Instant;
 mod libfukushuu;
 use crate::libfukushuu::db;
 use crate::libfukushuu::db::{Card, Category, Pool};
@@ -42,18 +43,57 @@ struct CategoryJson {
     name: String,
     pools: Vec<PoolJson>,
 }
+impl CategoryJson {
+    fn from(cate: &Category) -> CategoryJson {
+        CategoryJson {
+            name: cate.name.clone(),
+            pools: vec![],
+        }
+    }
+}
 #[derive(Serialize, Deserialize, Debug)]
 struct PoolJson {
     id: i32,
     category_name: Option<String>,
     cards: Vec<CardJson>,
 }
+impl PoolJson {
+    fn from(pool: &Pool) -> PoolJson {
+        PoolJson {
+            id: pool.id,
+            category_name: pool.category_name.clone(),
+            cards: vec![],
+        }
+    }
+}
 #[derive(Serialize, Deserialize, Debug)]
 struct CardJson {
+    id: Option<i32>,
     front: Option<String>,
     back: Option<String>,
     front_image: Option<PathBuf>,
     back_image: Option<PathBuf>,
+    score: Option<i32>,
+}
+macro_rules! empty_none_or_some {
+    ($condition: expr, $some_value: expr) => {
+        match $condition {
+            true => None,
+            false => Some($some_value),
+        }
+    };
+}
+impl CardJson {
+    fn from(card: &Card) -> CardJson {
+        CardJson {
+            id: card.id,
+            front: empty_none_or_some!(card.front.is_empty(), card.front.clone()),
+            back: empty_none_or_some!(card.back.is_empty(), card.back.clone()),
+            front_image: empty_none_or_some!(card.front_image.clone().into_os_string().is_empty(), card.front_image.clone()),
+            back_image: empty_none_or_some!(card.back_image.clone().into_os_string().is_empty(), card.back_image.clone()),
+            score: card.score,
+        }
+    }
 }
 
 fn main() {
@@ -86,18 +126,18 @@ fn main() {
         }
     };
 
-    let json = std::fs::read_to_string(json_file).unwrap();
-    let content: FukushuuJson = match serde_json::from_str(json.as_str()) {
-        Ok(c) => c,
-        Err(error) => {
-            error!("{}", format!("Malformed JSON: {}!", error).red());
-            db::close_db(db).unwrap();
-            std::process::exit(1);
-        }
-    };
-
     match args.command {
         Commands::Import => {
+            let json = std::fs::read_to_string(json_file).unwrap();
+            let content: FukushuuJson = match serde_json::from_str(json.as_str()) {
+                Ok(c) => c,
+                Err(error) => {
+                    error!("{}", format!("Malformed JSON: {}!", error).red());
+                    db::close_db(db).unwrap();
+                    std::process::exit(1);
+                }
+            };
+
             info!(
                 "{}",
                 format!(
@@ -168,12 +208,12 @@ fn main() {
                             Card::add(
                                 &db,
                                 Card {
-                                    id: None,
+                                    id: card.id,
                                     front: card.front.clone().unwrap_or_default(),
                                     back: card.back.clone().unwrap_or_default(),
                                     front_image: card.front_image.clone().unwrap_or_default(),
                                     back_image: card.back_image.clone().unwrap_or_default(),
-                                    score: None,
+                                    score: card.score,
                                     pool_id: Some(pool.id),
                                     category_name: Some(category.name.clone()),
                                 },
@@ -197,7 +237,33 @@ fn main() {
             });
         }
         Commands::Export => {
-            todo!()
+            let start = Instant::now();
+
+            let mut exported = FukushuuJson {
+                categories: vec![],
+            };
+
+            let available_categories = Category::get_all(&db).unwrap();
+            available_categories.iter().enumerate().for_each(|(i, category)| {
+                info!("{}", format!("Exporting Category {}/{}", i + 1, available_categories.len()).blue());
+                let mut category = CategoryJson::from(category);
+                let pools_in_category = Pool::get_all_in_category(&db, &category.name).unwrap();
+                pools_in_category.iter().enumerate().for_each(|(j, pool)| {
+                    info!("  {}", format!("Exporting Pool {}/{}", j + 1, pools_in_category.len()).blue());
+                    let mut pool = PoolJson::from(pool);
+                    let cards_in_pool = Card::get_in_pool(&db, pool.id).unwrap();
+                    cards_in_pool.iter().enumerate().for_each(|(k, card)| {
+                        info!("    {}", format!("Exporting Card {}/{}", k + 1, cards_in_pool.len()).green());
+                        pool.cards.push(CardJson::from(card));
+                    });
+                    category.pools.push(pool);
+                });
+                exported.categories.push(category);
+            });
+
+            let json_exported = serde_json::to_string(&exported).unwrap();
+            std::fs::write(json_file, json_exported).unwrap();
+            info!("{}", format!("Export Complete in {} ms!", start.elapsed().as_millis()).green());
         }
     }
 

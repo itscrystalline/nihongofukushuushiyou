@@ -127,7 +127,7 @@ impl Pool {
     }
     pub fn get_all_in_category(
         connection: &Connection,
-        category_name: String,
+        category_name: &String,
     ) -> Result<Vec<Pool>> {
         let mut statement = connection.prepare("SELECT * FROM Pool WHERE categoryName = :name")?;
         let rows = statement.query_map(&[(":name", &category_name)], |row| {

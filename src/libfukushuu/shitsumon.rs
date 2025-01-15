@@ -236,7 +236,7 @@ pub(crate) fn rand_category(conn: &Connection) -> Option<Category> {
 }
 
 pub(crate) fn rand_pool(conn: &Connection, category: &Category) -> Option<Pool> {
-    let pools = Pool::get_all_in_category(&conn, category.name.clone()).unwrap();
+    let pools = Pool::get_all_in_category(&conn, &category.name).unwrap();
     match pools.choose(&mut rng()) {
         None => None,
         Some(pool) => Some(pool.clone()),
