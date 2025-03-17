@@ -1,20 +1,20 @@
 use clap::Parser;
 use colored::Colorize;
 use env_logger::Env;
-use log::{debug, error, info, warn};
+use kitty_image::{Action, Command, WrappedCommand};
+use libfukushuu::shitsumon::{category, OptionPair};
+use log::{debug, warn};
 use rusqlite::{Connection, Result};
 use std::cmp::PartialEq;
-use std::fmt::format;
+use std::io;
 use std::path::PathBuf;
-use std::process::exit;
-use std::str::FromStr;
-use std::{env, path::Path};
 use text_io::read;
+use thiserror::Error;
 
 mod libfukushuu;
 
 use crate::libfukushuu::db;
-use crate::libfukushuu::shitsumon::{get_question_cards, init_questions, rand_category};
+use crate::libfukushuu::shitsumon::{get_question_cards, init_questions};
 
 #[derive(Debug, PartialEq)]
 enum Choice {
@@ -29,6 +29,8 @@ enum Choice {
 struct Args {
     #[arg(short, long, value_name = "FILE", default_value = "flashcards.db")]
     db: Option<PathBuf>,
+    #[arg(long)]
+    category: Option<String>,
     #[arg(short, long, default_value = "20")]
     question_count: u32,
     #[arg(short, long, default_value = "4")]
@@ -43,7 +45,7 @@ impl Choice {
             "q" => Choice::Quit,
             input => match input.parse::<usize>() {
                 Ok(num) => {
-                    if (num > choices_count as usize) {
+                    if num > choices_count as usize {
                         println!(
                             "{}",
                             format!("There are only {} options available!", choices_count)
@@ -51,23 +53,26 @@ impl Choice {
                         );
                         Choice::DontKnow
                     } else {
-                        Choice::Option(num)
+                        Choice::Option(num - 1)
                     }
                 }
                 Err(_) => Choice::DontKnow,
             },
         }
     }
-    fn from_usize(choices_count: u32, input: usize) -> Result<Choice, ()> {
-        if (input >= choices_count as usize) {
-            Err(())
-        } else {
-            Ok(Choice::Option(input + 1))
-        }
-    }
 }
 
-fn main() {
+#[derive(Debug, Error)]
+enum Error {
+    #[error("no categories!")]
+    NoCategories,
+    #[error("Cannot read image")]
+    ImageRead(#[from] io::Error),
+    #[error("cannot decode image")]
+    ImageDecode(#[from] image::ImageError),
+}
+
+fn main() -> Result<(), Error> {
     //INIT START
     let args = Args::parse();
     let question_count = args.question_count;
@@ -78,7 +83,7 @@ fn main() {
     let conn = db::create_or_open(db_path).unwrap();
     debug!("[DB] Database Connection Successful!");
 
-    let category = match rand_category(&conn) {
+    let category = match category(&conn, args.category.as_deref()) {
         Some(category) => category,
         None => {
             warn!("[Setup] No categories found.");
@@ -87,8 +92,7 @@ fn main() {
                 "No categories found. Come back when you have added some cards to the database!"
                     .yellow()
             );
-            finish(conn, Ok(()));
-            exit(0)
+            return finish(conn, Err(Error::NoCategories));
         }
     };
     debug!("[Setup] Picked category {:?}", category);
@@ -98,7 +102,7 @@ fn main() {
             "==========> {} ({} questions) <==========",
             category.name, question_count
         )
-            .cyan()
+        .cyan()
     );
 
     let cards = get_question_cards(&conn, question_count, category);
@@ -138,24 +142,40 @@ fn main() {
                 questions[idx - 1].front,
                 questions[idx - 1].score
             )
-                .black()
-                .bold()
-                .on_white()
+            .black()
+            .bold()
+            .on_white()
         );
         let (options, correct) = questions[idx - 1].get_options_randomize();
 
         let indent = " ".repeat(leading.len());
-        for (i, option) in options.iter().enumerate() {
-            println!("{}{}. {}", indent, format!("{}", i + 1).bold(), option)
-        }
-
-        let correct_choice = match Choice::from_usize(choices_count, correct) {
-            Ok(choice) => choice,
-            Err(_) => {
-                finish(conn, Err("Cannot convert usize to Choice!"));
-                exit(1)
+        for (i, OptionPair(str, img)) in options.iter().enumerate() {
+            print!("{}{}. ", indent, format!("{}", i + 1).bold());
+            if let Some(string) = str {
+                println!("{}", string);
             }
-        };
+            if let Some(image_path) = img {
+                debug!("path at {image_path:?}");
+                let (width, height) = image::image_dimensions(image_path)?;
+                let action = Action::TransmitAndDisplay(
+                    kitty_image::ActionTransmission {
+                        format: kitty_image::Format::Png,
+                        medium: kitty_image::Medium::File,
+                        width,
+                        height,
+                        ..Default::default()
+                    },
+                    kitty_image::ActionPut {
+                        x_offset: 10 * leading.len() as u32,
+                        ..Default::default()
+                    },
+                );
+                let command =
+                    WrappedCommand::new(Command::with_payload_from_path(action, image_path));
+                println!("{command}");
+                print!("{}", "\n".repeat(height as usize / 20));
+            }
+        }
 
         print!(
             "{} ",
@@ -167,13 +187,13 @@ fn main() {
 
         match choice {
             Choice::Option(num) => {
-                if choice == correct_choice {
+                if num == correct {
                     incr_and_print!(questions[idx - 1]);
                 } else {
                     decr_and_print!(questions[idx - 1]);
                     println!(
                         "{}",
-                        format!("The correct choice was {:?}.", correct_choice).green()
+                        format!("The correct choice was {:?}.", correct).green()
                     )
                 }
             }
@@ -181,27 +201,20 @@ fn main() {
                 decr_and_print!(questions[idx - 1]);
                 println!(
                     "{}",
-                    format!("The correct choice was {:?}.", correct_choice).green()
+                    format!("The correct choice was {:?}.", correct).green()
                 )
             }
             Choice::Quit => {
                 println!("{}", "Quitting Early!".cyan());
-                finish(conn, Ok(()));
-                exit(0)
+                return finish(conn, Ok(()));
             }
         }
     }
 
-    finish(conn, Ok(()));
+    finish(conn, Ok(()))
 }
 
-fn finish(conn: Connection, to_error: Result<(), &str>) {
+fn finish(conn: Connection, to_error: Result<(), Error>) -> Result<(), Error> {
     db::close_db(conn).unwrap();
-    exit(match to_error {
-        Ok(_) => 0,
-        Err(msg) => {
-            error!("Need to exit with cause: {}", msg);
-            1
-        }
-    });
+    to_error
 }

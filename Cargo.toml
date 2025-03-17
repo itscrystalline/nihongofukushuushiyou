@@ -14,6 +14,9 @@ text_io = "0.1.12"
 clap = { version = "4.5.23", features = ["derive"] }
 serde_json = "1.0.135"
 serde = { version = "1.0.217", features = ["derive"] }
+kitty_image = "0.1.0"
+image = "0.25.5"
+thiserror = "2.0.12"
 
 [[bin]]
 name = "nyuushutsuryokusha"

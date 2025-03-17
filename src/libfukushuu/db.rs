@@ -1,6 +1,6 @@
 use log::{debug, error, info, warn};
 use rusqlite::{params, Connection, DatabaseName, Result, Row};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ pub struct Card {
 }
 
 impl Category {
-    pub fn new(connection: &Connection, name: String) -> Result<()> {
+    pub fn create(connection: &Connection, name: String) -> Result<()> {
         match connection.execute("INSERT INTO Category (name) VALUES (?1)", params![name]) {
             Ok(_) => {
                 debug!("[DB] Created new Category '{}'", name);
@@ -39,7 +39,7 @@ impl Category {
     }
 
     pub fn add(connection: &Connection, src: Category) -> Result<()> {
-        Self::new(connection, src.name)
+        Self::create(connection, src.name)
     }
     pub fn delete(connection: &Connection, name: String) -> Result<()> {
         match connection.execute("DELETE FROM Category WHERE name = ?1", params![name]) {
@@ -61,7 +61,7 @@ impl Category {
         rows.collect()
     }
 
-    pub fn get_one(connection: &Connection, name: &String) -> Result<Category> {
+    pub fn get_one(connection: &Connection, name: &str) -> Result<Category> {
         let mut statement =
             connection.prepare("SELECT * FROM Category WHERE name = :name LIMIT 1")?;
         let row = statement.query_row(&[(":name", &name)], |row| row.get(0))?;
@@ -70,8 +70,8 @@ impl Category {
     }
 }
 impl Pool {
-    pub fn new(connection: &Connection, id: i32, category_name: Option<String>) -> Result<()> {
-        let actual_name = category_name.or(Some(String::new())).unwrap();
+    pub fn create(connection: &Connection, id: i32, category_name: Option<String>) -> Result<()> {
+        let actual_name = category_name.unwrap_or_default();
         match connection.execute(
             "INSERT INTO Pool (id, categoryName) VALUES (?1, ?2)",
             params![id, actual_name],
@@ -88,7 +88,7 @@ impl Pool {
     }
 
     pub fn add(connection: &Connection, src: Pool) -> Result<()> {
-        Self::new(connection, src.id, src.category_name)
+        Self::create(connection, src.id, src.category_name)
     }
     pub fn delete(connection: &Connection, id: i32) -> Result<()> {
         match connection.execute("DELETE FROM Pool WHERE id = ?1", params![id]) {
@@ -237,21 +237,21 @@ impl Card {
 
     pub fn get_all(connection: &Connection) -> Result<Vec<Card>> {
         let mut statement = connection.prepare("SELECT * FROM Card")?;
-        let rows = statement.query_map([], |row| Self::from_row(row))?;
+        let rows = statement.query_map([], Self::from_row)?;
 
         rows.collect()
     }
 
     pub fn get_by_id(connection: &Connection, id: i32) -> Result<Card> {
         let mut statement = connection.prepare("SELECT * FROM Card WHERE id = :id LIMIT 1")?;
-        let row = statement.query_row(&[(":id", &id)], |row| Self::from_row(row))?;
+        let row = statement.query_row(&[(":id", &id)], Self::from_row)?;
 
         Ok(row)
     }
 
     pub fn get_in_pool(connection: &Connection, pool_id: i32) -> Result<Vec<Card>> {
         let mut statement = connection.prepare("SELECT * FROM Card WHERE poolId = :poolId")?;
-        let rows = statement.query_map(&[(":poolId", &pool_id)], |row| Self::from_row(row))?;
+        let rows = statement.query_map(&[(":poolId", &pool_id)], Self::from_row)?;
 
         rows.collect()
     }
@@ -279,7 +279,7 @@ impl Card {
         }
     }
     pub fn get_score(connection: &Connection, id: i32) -> Result<Option<i32>> {
-        let card = Card::get_by_id(&connection, id)?;
+        let card = Card::get_by_id(connection, id)?;
         Ok(card.score)
     }
 }
@@ -322,22 +322,22 @@ pub fn open_db(src: PathBuf) -> Result<Connection> {
 
 pub fn close_db(connection: Connection) -> Result<()> {
     info!("[DB] Closing Database");
-    match connection.close() {
-        Ok(_) => Ok(()),
-        Err((conn, _)) => {
-            error!("[DB] Cannot close connection. Retrying 1/2...");
-            match conn.close() {
-                Ok(_) => Ok(()),
-                Err((conn2, _)) => {
-                    error!("[DB] Cannot close connection. Retrying 2/2...");
-                    match conn2.close() {
-                        Ok(_) => Ok(()),
-                        Err(_) => panic!("[DB] Cannot close connection! Aborting."),
-                    }
-                }
+    let mut fails = 0;
+    let mut opt_conn = Some(connection);
+    let mut res = Ok(());
+    while let Some(conn) = opt_conn.take() {
+        if let Err((con, e)) = conn.close() {
+            error!("[DB] Cannot close connection. (reason: {e})");
+            fails += 1;
+            if fails > 3 {
+                error!("[DB] Cannot close connection. Giving up.");
+                res = Err(e);
+                break;
             }
+            _ = opt_conn.insert(con);
         }
     }
+    res
 }
 
 fn init_db(conn: Connection) -> Result<Connection> {
