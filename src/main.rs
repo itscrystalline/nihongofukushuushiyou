@@ -120,9 +120,9 @@ fn main() -> Result<(), Error> {
 
     // INIT DONE
     #[cfg(feature = "cli")]
-    cli::cli_loop(&conn, &mut questions, question_count, choices_count)?;
+    cli::cli_loop(&conn, questions, question_count, choices_count)?;
     #[cfg(feature = "gui")]
-    gui::init_gui(&conn, &mut questions, question_count, choices_count)?;
+    gui::init_gui(&conn, questions, question_count, choices_count)?;
 
     finish(conn, Ok(()))
 }

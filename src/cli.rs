@@ -10,7 +10,7 @@ use text_io::read;
 
 pub fn cli_loop(
     conn: &Connection,
-    questions: &mut [Question],
+    questions: Vec<Question>,
     question_count: u32,
     choices_count: u32,
 ) -> Result<(), Error> {

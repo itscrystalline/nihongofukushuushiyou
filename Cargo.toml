@@ -9,6 +9,7 @@ rusqlite = { version = "0.34.0", features = ["bundled", "backup"] }
 log = "0.4.22"
 env_logger = "0.11.6"
 eframe = { version = "0.31.1", optional = true }
+egui_extras = { version = "0.31.1", optional = true, features = ["image", "file"] }
 rand = "0.9.0-beta.1"
 colored = "3.0.0"
 text_io = "0.1.12"
@@ -16,7 +17,7 @@ clap = { version = "4.5.23", features = ["derive"] }
 serde_json = "1.0.135"
 serde = { version = "1.0.217", features = ["derive"] }
 kitty_image = { version = "0.1.0", optional = true }
-image = { version = "0.25.5", optional = true }
+image = { version = "0.25.5", optional = true, features = ["png"] }
 thiserror = "2.0.12"
 cfg-if = "1.0.0"
 
@@ -24,7 +25,7 @@ cfg-if = "1.0.0"
 default = ["gui"]
 cli = []
 kittygfx = ["dep:image", "dep:kitty_image", "cli"]
-gui = ["dep:eframe"]
+gui = ["dep:eframe", "dep:egui_extras", "dep:image"]
 
 
 [[bin]]
