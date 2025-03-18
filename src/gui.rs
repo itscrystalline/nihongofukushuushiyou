@@ -1,13 +1,10 @@
-use std::thread::current;
 
 use crate::libfukushuu::shitsumon::OptionPair;
 use crate::libfukushuu::shitsumon::Question;
 use crate::Error;
 use eframe::egui;
 use eframe::egui::Align;
-use eframe::egui::Color32;
 use eframe::egui::FontData;
-use eframe::egui::FontId;
 use eframe::egui::Frame;
 use eframe::egui::RichText;
 use eframe::egui::ScrollArea;

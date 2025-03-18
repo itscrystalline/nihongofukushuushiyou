@@ -1,11 +1,10 @@
 use clap::Parser;
 use colored::Colorize;
 use env_logger::Env;
-use libfukushuu::shitsumon::{category, OptionPair, Question};
+use libfukushuu::shitsumon::category;
 use log::{debug, warn};
 use rusqlite::{Connection, Result};
 use std::cmp::PartialEq;
-use std::io;
 use std::path::PathBuf;
 use thiserror::Error;
 
