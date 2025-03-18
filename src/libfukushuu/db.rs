@@ -335,6 +335,8 @@ pub fn close_db(connection: Connection) -> Result<()> {
                 break;
             }
             _ = opt_conn.insert(con);
+        } else {
+            res = Ok(());
         }
     }
     res
