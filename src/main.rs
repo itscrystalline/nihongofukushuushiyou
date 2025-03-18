@@ -1,15 +1,18 @@
 use clap::Parser;
 use colored::Colorize;
 use env_logger::Env;
-use kitty_image::{Action, Command, WrappedCommand};
-use libfukushuu::shitsumon::{category, OptionPair};
+use libfukushuu::shitsumon::{category, OptionPair, Question};
 use log::{debug, warn};
 use rusqlite::{Connection, Result};
 use std::cmp::PartialEq;
 use std::io;
 use std::path::PathBuf;
-use text_io::read;
 use thiserror::Error;
+
+#[cfg(feature = "cli")]
+mod cli;
+#[cfg(feature = "gui")]
+mod gui;
 
 mod libfukushuu;
 
@@ -66,10 +69,15 @@ impl Choice {
 enum Error {
     #[error("no categories!")]
     NoCategories,
+    #[cfg(feature = "kittygfx")]
     #[error("Cannot read image")]
     ImageRead(#[from] io::Error),
+    #[cfg(feature = "kittygfx")]
     #[error("cannot decode image")]
     ImageDecode(#[from] image::ImageError),
+    #[cfg(feature = "gui")]
+    #[error("cannot initialize gui")]
+    GuiInitialization(#[from] eframe::Error),
 }
 
 fn main() -> Result<(), Error> {
@@ -112,104 +120,10 @@ fn main() -> Result<(), Error> {
     debug!("[Setup] Questions: {:?}", questions.len());
 
     // INIT DONE
-
-    for idx in 1..questions.len() + 1 {
-        macro_rules! incr_and_print {
-            ($to_incr: expr) => {
-                let score = $to_incr.increment_score(&conn).unwrap();
-                println!(
-                    "{}",
-                    format!("Correct!: {} -> {}", score - 1, score).bright_green()
-                )
-            };
-        }
-        macro_rules! decr_and_print {
-            ($to_incr: expr) => {
-                let score = $to_incr.decrement_score(&conn).unwrap();
-                println!(
-                    "{}",
-                    format!("Incorrect!: {} -> {}", score + 1, score).bright_red()
-                )
-            };
-        }
-
-        let leading = format!("{}/{}. ", idx, question_count);
-        println!(
-            "{}{}",
-            leading.cyan(),
-            format!(
-                "{:?} ({})",
-                questions[idx - 1].front,
-                questions[idx - 1].score
-            )
-            .black()
-            .bold()
-            .on_white()
-        );
-        let (options, correct) = questions[idx - 1].get_options_randomize();
-
-        let indent = " ".repeat(leading.len());
-        for (i, OptionPair(str, img)) in options.iter().enumerate() {
-            print!("{}{}. ", indent, format!("{}", i + 1).bold());
-            if let Some(string) = str {
-                println!("{}", string);
-            }
-            if let Some(image_path) = img {
-                debug!("path at {image_path:?}");
-                let (width, height) = image::image_dimensions(image_path)?;
-                let action = Action::TransmitAndDisplay(
-                    kitty_image::ActionTransmission {
-                        format: kitty_image::Format::Png,
-                        medium: kitty_image::Medium::File,
-                        width,
-                        height,
-                        ..Default::default()
-                    },
-                    kitty_image::ActionPut {
-                        x_offset: 10 * leading.len() as u32,
-                        ..Default::default()
-                    },
-                );
-                let command =
-                    WrappedCommand::new(Command::with_payload_from_path(action, image_path));
-                println!("{command}");
-                print!("{}", "\n".repeat(height as usize / 20));
-            }
-        }
-
-        print!(
-            "{} ",
-            "Answer (1-4, q to quit prematurely and anything else if you don't know):".cyan()
-        );
-        let choice_string: String = read!("{}\n");
-        let choice = Choice::from_str(choices_count, choice_string.as_str());
-        debug!("choice: {:?}", choice);
-
-        match choice {
-            Choice::Option(num) => {
-                if num == correct {
-                    incr_and_print!(questions[idx - 1]);
-                } else {
-                    decr_and_print!(questions[idx - 1]);
-                    println!(
-                        "{}",
-                        format!("The correct choice was {:?}.", correct).green()
-                    )
-                }
-            }
-            Choice::DontKnow => {
-                decr_and_print!(questions[idx - 1]);
-                println!(
-                    "{}",
-                    format!("The correct choice was {:?}.", correct).green()
-                )
-            }
-            Choice::Quit => {
-                println!("{}", "Quitting Early!".cyan());
-                return finish(conn, Ok(()));
-            }
-        }
-    }
+    #[cfg(feature = "cli")]
+    cli::cli_loop(&conn, &mut questions, question_count, choices_count)?;
+    #[cfg(feature = "gui")]
+    gui::init_gui(&conn, &mut questions, question_count, choices_count)?;
 
     finish(conn, Ok(()))
 }
